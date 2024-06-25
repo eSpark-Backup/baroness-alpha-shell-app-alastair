@@ -18,6 +18,9 @@ namespace simplejsi {
   std::string installAPKCMD(const std::string &apkPath, std::function<void(std::string)> callback);
   std::string uninstallAPKCMD(const std::string &packageName);
   void install(facebook::jsi::Runtime &jsiRuntime);
+  void registerHelloWorld(facebook::jsi::Runtime &jsiRuntime);
+  void registerStartSocketServer(facebook::jsi::Runtime &runtime);
+  void registerFoo(facebook::jsi::Runtime &jsiRuntime);
 }
 
 #endif /* SIMPLEJSI_H */

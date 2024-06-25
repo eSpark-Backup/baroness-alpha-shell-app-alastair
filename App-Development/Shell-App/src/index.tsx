@@ -24,6 +24,19 @@ export function uninstallAPK(packageName: string): string{
   return SimpleJsi.uninstallAPK(packageName);
 }
 
+export function startFTPServer(): void{
+  return SimpleJsi.startFTPServer();
+}
+
 export function installAPK(packageName: string, callback: (event: string) => void): string{
   return SimpleJsi.installAPK(packageName, callback);
+}
+
+export function turnOnHotspot( successCallback: (result: { ssid: string; password: string }) => void,
+                                failureCallback: (errorCode: string, errorMessage: string) => void): void 
+{
+  SimpleJsi.turnOnHotspot(
+    successCallback,
+    failureCallback
+  );
 }

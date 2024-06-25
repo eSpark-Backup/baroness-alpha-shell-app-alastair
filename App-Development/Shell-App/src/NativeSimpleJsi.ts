@@ -9,6 +9,9 @@ export interface Spec extends TurboModule {
   install(): void;
   uninstallAPK(packageName: string): string;
   installAPK(packageName: string, callback: (event: string) => void): string;
+  startFTPServer(): void;
+  turnOnHotspot( successCallback: (result: { ssid: string; password: string }) => void,
+                                failureCallback: (errorCode: string, errorMessage: string) => void): void;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('SimpleJsi');

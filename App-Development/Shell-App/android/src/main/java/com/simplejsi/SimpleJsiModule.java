@@ -25,6 +25,20 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.io.DataOutputStream;
+import java.util.Collections;
+
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReactMethod;
+
+import org.apache.ftpserver.FtpServer;
+import org.apache.ftpserver.FtpServerFactory;
+import org.apache.ftpserver.ftplet.*;
+import org.apache.ftpserver.ftplet.FtpException;
+import org.apache.ftpserver.listener.ListenerFactory;
+import org.apache.ftpserver.usermanager.impl.BaseUser;
+import org.apache.ftpserver.usermanager.impl.WritePermission;
 
 @ReactModule(name = SimpleJsiModule.NAME)
 public class SimpleJsiModule extends NativeSimpleJsiSpec {
@@ -34,10 +48,12 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
     private final ReactApplicationContext reactContext;
     private static final int PERMISSION_REQUEST_CODE = 1;
     private Callback permissionCallback;
+    private final APManager apManager;
 
     public SimpleJsiModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
+        apManager = APManager.getApManager(reactContext);
     }
 
     @Override
@@ -75,6 +91,29 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         double result = nativeAdd(a, b, context.getJavaScriptContextHolder().get());
         // callBack.invoke();
         return result;
+    }
+
+    public void turnOnHotspot(final Callback successCallback, final Callback errorCallback) {
+        apManager.turnOnHotspot(getReactApplicationContext(), new APManager.OnSuccessListener() {
+            @Override
+            public void onSuccess(@NonNull String ssid, @NonNull String password) {
+                // Log the SSID and password when hotspot is successfully turned on
+                Log.d("Hotspot", "SSID: " + ssid);
+                Log.d("Hotspot", "Password: " + password);
+
+                // Prepare response to React Native
+                WritableMap map = Arguments.createMap();
+                map.putString("ssid", ssid);
+                map.putString("password", password);
+                successCallback.invoke(map);
+            }
+        }, new APManager.OnFailureListener() {
+            @Override
+            public void onFailure(int failureCode, Exception e) {
+                String errorCode = getErrorCodeFromFailureCode(failureCode);
+                errorCallback.invoke(errorCode, e.getMessage());
+            }
+        });
     }
 
     public void requestInstallPackagesPermission(Callback callback) {
@@ -265,6 +304,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         }
     }
 
+    @ReactMethod(isBlockingSynchronousMethod = true)
     public void install() {
         try {
             nativeInstall(reactContext.getJavaScriptContextHolder().get());
@@ -272,6 +312,109 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         } 
         catch (Exception exception) {
             // return false;
+        }
+    }
+
+    private String getErrorCodeFromFailureCode(int failureCode) {
+        switch (failureCode) {
+            case APManager.ERROR_GPS_PROVIDER_DISABLED:
+                return "GPS_PROVIDER_DISABLED";
+            case APManager.ERROR_LOCATION_PERMISSION_DENIED:
+                return "LOCATION_PERMISSION_DENIED";
+            case APManager.ERROR_DISABLE_HOTSPOT:
+                return "DISABLE_HOTSPOT";
+            case APManager.ERROR_DISABLE_WIFI:
+                return "DISABLE_WIFI";
+            case APManager.ERROR_WRITE_SETTINGS_PERMISSION_REQUIRED:
+                return "WRITE_SETTINGS_PERMISSION_REQUIRED";
+            default:
+                return "UNKNOWN_ERROR";
+        }
+    }
+
+    private static final int FTP_PORT = 2221; // Example port, choose one that is not in use
+
+    private FtpServer ftpServer;
+    
+    public void startFTPServer() {
+        Log.d(TAG, "Starting FTP Server");
+        FtpServerFactory serverFactory = new FtpServerFactory();
+
+        ListenerFactory factory = new ListenerFactory();
+        factory.setPort(FTP_PORT);
+        serverFactory.addListener("default", factory.createListener());
+
+        // Set user credentials (example, replace with your actual logic)
+        BaseUser user = new BaseUser();
+        user.setName("anonymous");
+        user.setPassword(""); // Anonymous user, no password
+        user.setHomeDirectory("/sdcard"); // Example home directory
+
+        // Grant write permission to the user's home directory
+        user.setAuthorities(Collections.singletonList(new WritePermission()));
+        
+        try {
+            serverFactory.getUserManager().save(user);
+        } catch (FtpException e) {
+            Log.e(TAG, "Error saving FTP user: " + e.getMessage());
+            // errorCallback.invoke("Error saving FTP user: " + e.getMessage());
+            return; // Exit the method if the user cannot be saved
+        }
+        
+        // Add FTP event listener to log file uploads
+        // serverFactory.addListener("default", new Ftplet() {
+        //     @Override
+        //     public void init(FtpletContext ftpletContext) throws FtpException {
+        //         Log.d(TAG, "Ftplet initialized");
+        //     }
+
+        //     @Override
+        //     public void destroy() {
+        //         Log.d(TAG, "Ftplet destroyed");
+        //     }
+
+        //     @Override
+        //     public FtpletResult onConnect(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
+        //         Log.d(TAG, "User connected: " + ftpRequest.getUser());
+        //         return FtpletResult.DEFAULT;
+        //     }
+
+        //     @Override
+        //     public FtpletResult onDisconnect(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
+        //         Log.d(TAG, "User disconnected: " + ftpRequest.getUser());
+        //         return FtpletResult.DEFAULT;
+        //     }
+
+        //     @Override
+        //     public FtpletResult beforeCommand(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
+        //         Log.d(TAG, "Before command: " + ftpRequest.getCommand());
+        //         return FtpletResult.DEFAULT;
+        //     }
+
+        //     @Override
+        //     public FtpletResult afterCommand(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
+        //         Log.d(TAG, "After command: " + ftpRequest.getCommand());
+        //         if (ftpRequest.getCommand().equalsIgnoreCase("STOR")) {
+        //             Log.d(TAG, "File upload detected: " + ftpRequest.getArgument());
+        //         }
+        //         return FtpletResult.DEFAULT;
+        //     }
+
+        //     @Override
+        //     public FtpletResult beforeReply(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
+        //         return FtpletResult.DEFAULT;
+        //     }
+        // });
+
+        ftpServer = serverFactory.createServer();
+
+        try {
+            ftpServer.start();
+            Log.d(TAG, "FTP Server started on port " + FTP_PORT);
+            // successCallback.invoke("FTP Server started");
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting FTP Server: " + e.getMessage());
+            // errorCallback.invoke("Error starting FTP Server: " + e.getMessage());
         }
     }
 }

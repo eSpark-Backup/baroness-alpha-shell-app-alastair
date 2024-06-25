@@ -126,7 +126,7 @@ Java_com_simplejsi_SimpleJsiModule_nativeUninstallAPK(JNIEnv *env, jclass type, 
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_reactnativesimplejsi_SimpleJsiModule_nativeInstall(JNIEnv *env, jobject thiz, jlong jsi)
+Java_com_simplejsi_SimpleJsiModule_nativeInstall(JNIEnv *env, jobject thiz, jlong jsi)
 {
     auto runtime = reinterpret_cast<facebook::jsi::Runtime *>(jsi);
 
