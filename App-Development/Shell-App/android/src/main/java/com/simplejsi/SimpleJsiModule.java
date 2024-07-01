@@ -9,6 +9,7 @@ import android.net.Uri;
 import androidx.core.content.FileProvider;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
 import android.os.Build;
 import android.util.Log;
 import android.widget.Toast;
@@ -25,7 +26,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.io.DataOutputStream;
+
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Callback;
@@ -39,6 +43,10 @@ import org.apache.ftpserver.ftplet.FtpException;
 import org.apache.ftpserver.listener.ListenerFactory;
 import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
+
+import android.app.ProgressDialog;
+import android.os.Handler;
+import android.os.Looper;
 
 @ReactModule(name = SimpleJsiModule.NAME)
 public class SimpleJsiModule extends NativeSimpleJsiSpec {
@@ -67,14 +75,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
     }
 
     private static native double nativeMultiply(double a, double b);
-
-    private static native double nativeAdd(double a, double b, long jsiPtr);
-
-    private static native double nativeRunCPP(InvokeClass callback);
-
-    private static native String nativeUninstallAPK(String packageName);
-
-    private static native String nativeInstallAPK(String path, InvokeClass callback);
+    private static native double nativeAdd(double a, double b);
 
     private native void nativeInstall(long jsiPtr);
 
@@ -87,9 +88,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
 
     @Override
     public double add(double a, double b) {
-        ReactApplicationContext context = getReactApplicationContext();
-        double result = nativeAdd(a, b, context.getJavaScriptContextHolder().get());
-        // callBack.invoke();
+        double result = nativeAdd(a, b);
         return result;
     }
 
@@ -219,24 +218,6 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         return resultBuilder.toString();
     }
 
-    public void runCPP(Callback callback) {
-        InvokeClass test = new InvokeClass();
-        test.registerCallback(callback);
-        nativeRunCPP(test);
-        // String msg = installAPKCMD("/storage/emulated/0/Download/testapp.apk");
-        // callback.invoke(msg);
-    }
-
-    public String uninstallAPK(String packageName) {
-        return nativeUninstallAPK(packageName);
-    }
-
-    public String installAPK(String path, Callback callback) {
-        InvokeClass test = new InvokeClass();
-        test.registerCallback(callback);
-        return nativeInstallAPK(path, test);
-    }
-
     public void installAPKIntent(String filePath) {
         File apkFile = new File(filePath);
 
@@ -287,23 +268,6 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         }
     }
 
-    // Class with invoke method returning the number passed to it
-    public class InvokeClass {
-        // Method to return the number passed to it
-        Callback callback;
-
-        public void registerCallback(Callback callBack) {
-            callback = callBack;
-        }
-
-        public void invoke(String message) {
-            // ReactApplicationContext context = getReactApplicationContext();
-            // String permissionsStatus = PermissionUtils.getPermissionsStatus(context);
-            // String combinedMessage = message + "\n" + permissionsStatus;
-            callback.invoke(message);
-        }
-    }
-
     @ReactMethod(isBlockingSynchronousMethod = true)
     public void install() {
         try {
@@ -348,7 +312,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         BaseUser user = new BaseUser();
         user.setName("anonymous");
         user.setPassword(""); // Anonymous user, no password
-        user.setHomeDirectory("/sdcard"); // Example home directory
+        user.setHomeDirectory("/sdcard/Download"); // Example home directory
 
         // Grant write permission to the user's home directory
         user.setAuthorities(Collections.singletonList(new WritePermission()));
@@ -360,51 +324,91 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
             // errorCallback.invoke("Error saving FTP user: " + e.getMessage());
             return; // Exit the method if the user cannot be saved
         }
-        
-        // Add FTP event listener to log file uploads
-        // serverFactory.addListener("default", new Ftplet() {
-        //     @Override
-        //     public void init(FtpletContext ftpletContext) throws FtpException {
-        //         Log.d(TAG, "Ftplet initialized");
-        //     }
 
-        //     @Override
-        //     public void destroy() {
-        //         Log.d(TAG, "Ftplet destroyed");
-        //     }
+        Ftplet myFtplet = new DefaultFtplet() {
+            @Override
+            public FtpletResult onUploadStart(FtpSession session, FtpRequest request) throws FtpException, IOException {
+                String fileName = request.getArgument();
+                String directory = session.getFileSystemView().getWorkingDirectory().getAbsolutePath();
+                FtpFile file = session.getFileSystemView().getFile(directory + "/" + fileName);
 
-        //     @Override
-        //     public FtpletResult onConnect(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
-        //         Log.d(TAG, "User connected: " + ftpRequest.getUser());
-        //         return FtpletResult.DEFAULT;
-        //     }
+                long fileSize = file.getSize(); // Assuming the file size is available at start
+                Log.d(TAG, "File Size: " + fileSize);
+                Log.d(TAG, "Directory: " + directory);
+                Log.d(TAG, "Upload started: " + fileName);
+                session.setAttribute("fileName", fileName);
+                session.setAttribute("uploadedSize", 0L);
+                return FtpletResult.DEFAULT;
+            }
 
-        //     @Override
-        //     public FtpletResult onDisconnect(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
-        //         Log.d(TAG, "User disconnected: " + ftpRequest.getUser());
-        //         return FtpletResult.DEFAULT;
-        //     }
+            @Override
+            public FtpletResult onAppendEnd(FtpSession session, FtpRequest request) throws FtpException, IOException {
+                Log.d(TAG, "On Append End");
+                updateProgress(session, request);
+                return FtpletResult.DEFAULT;
+            }
 
-        //     @Override
-        //     public FtpletResult beforeCommand(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
-        //         Log.d(TAG, "Before command: " + ftpRequest.getCommand());
-        //         return FtpletResult.DEFAULT;
-        //     }
+            @Override
+            public FtpletResult onUploadEnd(FtpSession session, FtpRequest request) throws FtpException, IOException {
+                updateProgress(session, request);
+                String fileName = request.getArgument();
+                String directory = session.getFileSystemView().getWorkingDirectory().getAbsolutePath();
+                FtpFile file = session.getFileSystemView().getFile(directory + "/" + fileName);
+                
+                long fileSize = file.getSize(); // Assuming the file size is available at start
+                Log.d(TAG, "File Size: " + fileSize);
+                Log.d(TAG, "Upload completed: " + fileName);
+                
+                String apkFilePath = "/storage/emulated/0/Download/" + fileName;
+                Log.d(TAG, "APK File PATH " + apkFilePath);
 
-        //     @Override
-        //     public FtpletResult afterCommand(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
-        //         Log.d(TAG, "After command: " + ftpRequest.getCommand());
-        //         if (ftpRequest.getCommand().equalsIgnoreCase("STOR")) {
-        //             Log.d(TAG, "File upload detected: " + ftpRequest.getArgument());
-        //         }
-        //         return FtpletResult.DEFAULT;
-        //     }
+                // Show a loading circle (ProgressDialog)
+                // final ProgressDialog progressDialog = new ProgressDialog(reactContext);
+                // progressDialog.setMessage("Installing...");
+                // progressDialog.setCancelable(false);
+                // progressDialog.show();
+                Handler mainHandler = new Handler(Looper.getMainLooper());
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(reactContext, "File Received: Installing", Toast.LENGTH_LONG).show();
+                    }
+                });
+                installAPKCMD(apkFilePath);
+                // progressDialog.dismiss();
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(reactContext, "App installed and updated", Toast.LENGTH_LONG).show();
+                    }
+                });
 
-        //     @Override
-        //     public FtpletResult beforeReply(FtpRequest ftpRequest, FtpReply ftpReply) throws FtpException, IOException {
-        //         return FtpletResult.DEFAULT;
-        //     }
-        // });
+                // String packageName = getPackageNameFromApk(apkFilePath);
+                // Log.d(TAG, "Package Name" + packageName);
+                // launchApp(packageName);
+                
+                return FtpletResult.DEFAULT;
+            }
+
+            private void updateProgress(FtpSession session, FtpRequest request) throws FtpException, IOException {
+                String fileName = (String) session.getAttribute("fileName");
+                long uploadedSize = session.getFileSystemView().getFile(fileName).getSize();
+                session.setAttribute("uploadedSize", uploadedSize);
+
+                Long fileSize = (Long) session.getAttribute("fileSize");
+                if (fileSize == null) {
+                    fileSize = uploadedSize;  // Use the uploaded size as a proxy for file size
+                    session.setAttribute("fileSize", fileSize);
+                }
+
+                int progress = (int) ((uploadedSize * 100) / fileSize);
+                Log.d(TAG, "Upload progress: " + fileName + " (" + progress + "%)");
+            }
+        };
+
+        Map<String, Ftplet> ftplets = new HashMap<>();
+        ftplets.put("myFtplet", myFtplet);
+        serverFactory.setFtplets(ftplets);
 
         ftpServer = serverFactory.createServer();
 
@@ -415,6 +419,29 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         } catch (Exception e) {
             Log.e(TAG, "Error starting FTP Server: " + e.getMessage());
             // errorCallback.invoke("Error starting FTP Server: " + e.getMessage());
+        }
+    }
+
+    public void launchApp(String packageName) {
+        PackageManager pm = reactContext.getPackageManager();
+        Intent launchIntent = pm.getLaunchIntentForPackage(packageName);
+        if (launchIntent != null) {
+            reactContext.startActivity(launchIntent);
+        } 
+        else {
+            // Handle the case where the package was not found
+            Toast.makeText(reactContext, "App not found", Toast.LENGTH_SHORT).show();
+            Log.e("LaunchApp", "Package not found: " + packageName);
+        }
+    }
+
+    public String getPackageNameFromApk(String apkFilePath) {
+        PackageManager pm = reactContext.getPackageManager();
+        PackageInfo packageInfo = pm.getPackageArchiveInfo(apkFilePath, 0);
+        if (packageInfo != null) {
+            return packageInfo.packageName;
+        } else {
+            return null;
         }
     }
 }

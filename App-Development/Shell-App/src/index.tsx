@@ -24,6 +24,10 @@ export function uninstallAPK(packageName: string): string{
   return SimpleJsi.uninstallAPK(packageName);
 }
 
+export function launchApp(packageName: string): void{
+  return SimpleJsi.launchApp(packageName);
+}
+
 export function startFTPServer(): void{
   return SimpleJsi.startFTPServer();
 }

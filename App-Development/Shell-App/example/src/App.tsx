@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { StyleSheet, View, Text, Alert, Button, ActivityIndicator } from 'react-native';
-import { requestInstallPackagesPermission, install, uninstallAPK, installAPK, turnOnHotspot, startFTPServer } from 'react-native-simple-jsi';
+import { requestInstallPackagesPermission, install, turnOnHotspot, startFTPServer, launchApp } from 'react-native-simple-jsi';
 import QRCode from 'react-native-qrcode-svg'; // Import QRCode
 
 export default function App() {
@@ -16,7 +16,8 @@ export default function App() {
   };
 
   const handleInstallButtonClick = () => {
-    installAPK("/storage/emulated/0/Download/testapp.apk", (event: string) => {
+    installAPK("/storage/emulated/0/Download/testfileapp.apk", (event: string) => {
+      console.log(event);
     });
   };
 
@@ -30,7 +31,8 @@ export default function App() {
     // let result = helloWorld();
     // console.log(result);
     // startSocketServer();
-    startFTPServer();
+    // launchApp("com.aiuspaktyn.ramusage");
+    // startFTPServer();
   }, []);
 
   const handleTurnOnHotspot = async () => {
@@ -44,7 +46,13 @@ export default function App() {
         setHotspotInfo(null);
       }
     );
+    startFTPServer();
   };
+
+  const handleLaunchApp = async () => {
+    launchApp("com.aiuspaktyn.ramusage");
+  };
+
 
   return (
     <View style={styles.container}>
@@ -73,13 +81,17 @@ export default function App() {
         <ActivityIndicator size="large" color="#0000ff" />
       ) : (
         <>
-          <Button
+          {/* <Button
             title="Install App"
             onPress={handleInstallButtonClick}
           />
           <Button
             title="Uninstall App"
             onPress={handleUninstallButtonClick}
+          /> */}
+          <Button
+            title="Launch App"
+            onPress={handleLaunchApp}
           />
         </>
       )}

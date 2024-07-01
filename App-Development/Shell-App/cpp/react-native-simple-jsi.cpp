@@ -30,7 +30,7 @@ using namespace facebook::jsi;
 namespace simplejsi
 {
 	static JavaVM *g_javaVM = nullptr;
-    static JNIEnv *g_jniEnv = nullptr;
+	static JNIEnv *g_jniEnv = nullptr;
 
 	static const char *TAG = "jsi-socket";
 
@@ -219,7 +219,7 @@ namespace simplejsi
 			}
 
 			// Perform the silent installation
-			// callback("start");
+			callback("start");
 			std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 			int installResult = system(installCommand.c_str());
 			if (installResult == 0)
@@ -237,7 +237,7 @@ namespace simplejsi
 			resultBuilder << "Exception occurred while installing APK: " << e.what();
 		}
 
-		// callback("end");
+		callback("end");
 		return resultBuilder.str();
 	}
 
@@ -388,14 +388,57 @@ namespace simplejsi
 		runtime.global().setProperty(runtime, "startSocketServer", std::move(startSocketServerFunc));
 	}
 
+	void registerInstallAPK(Runtime &jsiRuntime)
+	{
+		auto installAPK = [](Runtime &runtime, const Value &thisValue, const Value *arguments, size_t count) -> Value
+		{
+			if (count != 2)
+			{
+				throw JSError(runtime, "installAPKCMD expects exactly 2 arguments");
+			}
+
+			std::string apkPath = arguments[0].asString(runtime).utf8(runtime);
+			auto callback = std::make_shared<Function>(arguments[1].asObject(runtime).asFunction(runtime));
+
+			std::string result = installAPKCMD(apkPath, [runtime = &runtime, callback](const std::string &msg)
+											{ 
+												callback->asFunction(*runtime).call(*runtime, String::createFromUtf8(*runtime, msg)); 
+											}
+											);
+
+			return String::createFromUtf8(runtime, result);
+		};
+
+		jsiRuntime.global().setProperty(jsiRuntime, "installAPK", Function::createFromHostFunction(jsiRuntime, PropNameID::forAscii(jsiRuntime, "installAPK"), 2, installAPK));
+	}
+
+	void registerUninstallAPK(Runtime &jsiRuntime)
+	{
+		auto uninstallAPK = [](Runtime &runtime, const Value &thisValue, const Value *arguments, size_t count) -> Value
+		{
+			if (count != 1)
+			{
+				throw JSError(runtime, "uninstallAPKCMD expects exactly 1 argument");
+			}
+
+			std::string packageName = arguments[0].asString(runtime).utf8(runtime);
+			std::string result = uninstallAPKCMD(packageName);
+
+			return String::createFromUtf8(runtime, result);
+		};
+
+		jsiRuntime.global().setProperty(jsiRuntime, "uninstallAPK", Function::createFromHostFunction(jsiRuntime, PropNameID::forAscii(jsiRuntime, "uninstallAPK"), 1, uninstallAPK));
+	}
+
 	void install(Runtime &jsiRuntime)
 	{
 		// Register the helloWorld function
 		registerHelloWorld(jsiRuntime);
 		registerFoo(jsiRuntime);
 		registerStartSocketServer(jsiRuntime);
+		registerInstallAPK(jsiRuntime);
+		registerUninstallAPK(jsiRuntime);
 	}
-
 
 	extern "C" jint JNI_OnLoad(JavaVM *vm, void *reserved)
 	{
