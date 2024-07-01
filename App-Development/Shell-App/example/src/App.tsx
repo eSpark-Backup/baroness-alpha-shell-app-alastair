@@ -23,16 +23,6 @@ export default function App() {
 
   React.useEffect(() => {
     install();
-
-    // requestInstallPackagesPermission((result) => {
-    //   Alert.alert(result);
-    // });
-    // helloWorld();
-    // let result = helloWorld();
-    // console.log(result);
-    // startSocketServer();
-    // launchApp("com.aiuspaktyn.ramusage");
-    // startFTPServer();
   }, []);
 
   const handleTurnOnHotspot = async () => {
