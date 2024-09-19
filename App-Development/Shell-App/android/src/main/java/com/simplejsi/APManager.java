@@ -21,20 +21,38 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 
-import java.lang.reflect.Method;
-import java.math.BigInteger;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.lang.reflect.Method;
+import java.math.BigInteger;
 
 public class APManager {
     private static final String TAG = "APManager";
     private static APManager apManager;
     private final Utils utils;
+
+    public static class Device {
+        public String ipAddress;
+        public String macAddress;
+
+        public Device(String ipAddress, String macAddress) {
+            this.ipAddress = ipAddress;
+            this.macAddress = macAddress;
+        }
+
+        @Override
+        public String toString() {
+            return "IP Address: " + ipAddress + ", MAC Address: " + macAddress;
+        }
+    }
 
     private APManager(Context context) {
         wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -206,18 +224,22 @@ public class APManager {
         if (!monitoringConnectedDevices) {
             monitoringConnectedDevices = true;
             Log.d(TAG, "Starting monitoring connected devices");
-            // Periodically check connected devices
+
             Handler handler = new Handler(Looper.getMainLooper());
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    List<String> connectedDevices = getConnectedDeviceNames();
+                    List<Device> connectedDevices = getConnectedDevices();
                     if (!connectedDevices.isEmpty()) {
-                        Log.d(TAG, "Connected devices: " + connectedDevices);
+                        for (Device device : connectedDevices) {
+                            Log.d(TAG, "Connected device: " + device);
+                        }
+                    } else {
+                        Log.d(TAG, "No connected devices found");
                     }
-                    handler.postDelayed(this, 5000); // Check every 5 seconds
+                    handler.postDelayed(this, 5000); 
                 }
-            }, 5000); // Initial delay 5 seconds
+            }, 5000);
         }
     }
 
@@ -226,37 +248,45 @@ public class APManager {
         Log.d(TAG, "Stopping monitoring connected devices");
     }
 
-    public List<String> getConnectedDeviceNames() {
-        List<String> connectedDeviceNames = new ArrayList<>();
-        DhcpInfo dhcpInfo = wifiManager.getDhcpInfo();
-    
-        // Extract IP addresses of connected devices
-        if (dhcpInfo != null) {
-            int start = dhcpInfo.ipAddress & dhcpInfo.netmask;
-            int end = start | ~dhcpInfo.netmask;
-    
-            for (int i = start + 1; i <= end - 1; i++) {
-                String ipAddress = getIpFromInt(i);
-                if (ipAddress != null) {
-                    connectedDeviceNames.add(ipAddress);
+    public List<Device> getConnectedDevices() {
+        List<Device> connectedDevices = new ArrayList<>();
+        BufferedReader reader = null;
+
+        try {
+            // Read from /proc/net/arp
+            reader = new BufferedReader(new FileReader("/proc/net/arp"));
+            String line;
+
+            // Skip the header
+            reader.readLine();
+
+            // Read each line from ARP table
+            while ((line = reader.readLine()) != null) {
+                String[] splitLine = line.split("\\s+");
+                if (splitLine.length >= 6) {
+                    String ipAddress = splitLine[0];
+                    String macAddress = splitLine[3];
+
+                    // Exclude invalid MAC addresses
+                    if (!macAddress.equals("00:00:00:00:00:00")) {
+                        connectedDevices.add(new Device(ipAddress, macAddress));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading ARP table", e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    Log.e(TAG, "Error closing reader", e);
                 }
             }
         }
-    
-        return connectedDeviceNames;
-    }
-    
-    private String getIpFromInt(int ip) {
-        try {
-            byte[] ipAddress = BigInteger.valueOf(ip).toByteArray();
-            InetAddress address = InetAddress.getByAddress(ipAddress);
-            return address.getHostAddress();
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-    
+
+        return connectedDevices;
+    }    
 
     public interface OnFailureListener {
         void onFailure(int failureCode, @Nullable Exception e);
