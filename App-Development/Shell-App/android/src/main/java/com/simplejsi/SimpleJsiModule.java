@@ -178,7 +178,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         }
 
         // Construct the command to install the APK using 'pm' command
-        String installCommand = "pm install " + file.getAbsolutePath();
+        String installCommand = "cat "+ file.getAbsolutePath() + " | pm install -S " + file.length();
 
         try {
             // Execute the command as superuser
@@ -273,7 +273,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         try {
             nativeInstall(reactContext.getJavaScriptContextHolder().get());
             // return true;
-        } 
+        }
         catch (Exception exception) {
             // return false;
         }
@@ -299,7 +299,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
     private static final int FTP_PORT = 2221; // Example port, choose one that is not in use
 
     private FtpServer ftpServer;
-    
+
     public void startFTPServer() {
         Log.d(TAG, "Starting FTP Server");
         FtpServerFactory serverFactory = new FtpServerFactory();
@@ -316,7 +316,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
 
         // Grant write permission to the user's home directory
         user.setAuthorities(Collections.singletonList(new WritePermission()));
-        
+
         try {
             serverFactory.getUserManager().save(user);
         } catch (FtpException e) {
@@ -354,11 +354,11 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
                 String fileName = request.getArgument();
                 String directory = session.getFileSystemView().getWorkingDirectory().getAbsolutePath();
                 FtpFile file = session.getFileSystemView().getFile(directory + "/" + fileName);
-                
+
                 long fileSize = file.getSize(); // Assuming the file size is available at start
                 Log.d(TAG, "File Size: " + fileSize);
                 Log.d(TAG, "Upload completed: " + fileName);
-                
+
                 String apkFilePath = "/storage/emulated/0/Download/" + fileName;
                 Log.d(TAG, "APK File PATH " + apkFilePath);
 
@@ -374,7 +374,8 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
                         Toast.makeText(reactContext, "File Received: Installing", Toast.LENGTH_LONG).show();
                     }
                 });
-                installAPKCMD(apkFilePath);
+                String installStatus = installAPKCMD(apkFilePath);
+                Log.d(TAG, "APK installStatus " + installStatus);
                 // progressDialog.dismiss();
                 mainHandler.post(new Runnable() {
                     @Override
@@ -386,7 +387,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
                 // String packageName = getPackageNameFromApk(apkFilePath);
                 // Log.d(TAG, "Package Name" + packageName);
                 // launchApp(packageName);
-                
+
                 return FtpletResult.DEFAULT;
             }
 
@@ -427,7 +428,7 @@ public class SimpleJsiModule extends NativeSimpleJsiSpec {
         Intent launchIntent = pm.getLaunchIntentForPackage(packageName);
         if (launchIntent != null) {
             reactContext.startActivity(launchIntent);
-        } 
+        }
         else {
             // Handle the case where the package was not found
             Toast.makeText(reactContext, "App not found", Toast.LENGTH_SHORT).show();
